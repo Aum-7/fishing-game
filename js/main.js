@@ -71,6 +71,9 @@ let inventory = {
     'large': 0
 };
 
+// Initialize casting max depth based on current rod after everything is defined
+casting.maxCastDepth = rodTypes[currentRodIndex].castDistance;
+
 // Bait types and costs
 const baitTypes = {
     'small': { name: 'Small Bait', cost: 10 },
@@ -93,7 +96,9 @@ for (let i = 0; i < 20; i++) {
 const hook = { 
     x: canvas.width / 2, 
     y: 50,
-    strength: rodTypes[currentRodIndex].strength
+    strength: rodTypes[currentRodIndex].strength,
+    vx: 0,  // Horizontal velocity for physics
+    vy: 0   // Vertical velocity for physics
 };
 
 // Upgrade slots for the rod
@@ -110,7 +115,7 @@ function buyRod() {
             gold -= nextRod.cost;
             currentRodIndex++;
             hook.strength = rodTypes[currentRodIndex].strength;
-            casting.maxCastDepth = rodTypes[currentRodIndex].castDistance;
+            casting.maxCastDepth = rodTypes[currentRodIndex].castDistance;  // Update the casting max depth
             updateUI();
             console.log(`Upgraded to ${nextRod.name}`);
         } else {
@@ -294,10 +299,10 @@ function update() {
         // Update fish movement
         fish.update();
         
-        // Check collision with hook (only when stationary and bait available)
+        // Check collision with hook (only when stationary or reeling and bait available)
         if (!fish.isCaught && 
             checkCollision(hook, fish) && 
-            casting.isFishing && 
+            (casting.isFishing || casting.isReeling) && 
             inventory[currentBait] > 0) {
             
             // Determine if this fish can be caught with current bait
@@ -338,9 +343,9 @@ function update() {
         
         // Handle predator fish behavior
         if (fish.fishType === 'predator' && !fish.isCaught) {
-            // Predators might steal bait from other fish
+            // Predators might steal bait from other fish (only if not already caught)
             fishes.forEach(otherFish => {
-                if (otherFish.caughtByHook && otherFish !== fish && Math.random() < fish.hunger) {
+                if (otherFish.caughtByHook && !otherFish.isCaught && otherFish !== fish && Math.random() < fish.hunger) {
                     otherFish.caughtByHook = false;
                     otherFish.isCaught = false;
                     console.log("Predator fish stole your catch!");
