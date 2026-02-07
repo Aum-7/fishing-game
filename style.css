@@ -16,7 +16,12 @@ body, html {
     top: 10px;
     left: 10px;
     color: white;
-    font-size: 20px;
+    font-size: 16px;
     pointer-events: none; /* Let clicks pass through to the canvas */
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+#ui-layer div {
+    margin-bottom: 8px;
 }

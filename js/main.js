@@ -6,20 +6,41 @@ let cameraY = 0;
 let waveOffset = 0; // For wave animation
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const scoreElement = document.getElementById('score');
+
+// Get UI elements
+const goldDisplay = document.getElementById('gold-display');
+const rodDisplay = document.getElementById('rod-display');
+const baitDisplay = document.getElementById('bait-display');
+const inventoryDisplay = document.getElementById('inventory-display');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Load boat image
+// Boat settings - moved before resize handler
+const boat = {
+    x: canvas.width / 2,
+    y: 0,
+    width: 200,  // Doubled from 100 to 200
+    height: 120,  // Doubled from 60 to 120
+    speed: 5
+};
+
+// Load boat image from assets
 const boatImage = new Image();
 boatImage.src = 'assets/Boat1.png';
-const boatImageLoaded = false;
+let boatImageLoaded = false;
 
-// Load sky image
+// Load sky image from assets
 const skyImage = new Image();
 skyImage.src = 'assets/Sky1.png';
 let skyImageLoaded = false;
+
+// Set loaded flags when images finish loading
+boatImage.onload = () => {
+    boatImageLoaded = true;
+    console.log("Boat image loaded successfully");
+};
+
 skyImage.onload = () => {
     skyImageLoaded = true;
     console.log("Sky image loaded successfully");
@@ -33,20 +54,93 @@ window.addEventListener('resize', () => {
     boat.x = canvas.width / 2;
 });
 
-// Boat settings
-const boat = {
-    x: canvas.width / 2,
-    y: 0,
-    width: 200,  // Doubled from 100 to 200
-    height: 120,  // Doubled from 60 to 120
-    speed: 5
+// Rod upgrade system
+const rodTypes = [
+    { name: 'Basic Rod', cost: 0, strength: 10, castDistance: 1000 },
+    { name: 'Reinforced Rod', cost: 500, strength: 20, castDistance: 1500 },
+    { name: 'Pro Rod', cost: 1500, strength: 35, castDistance: 2500 },
+    { name: 'Champion Rod', cost: 5000, strength: 50, castDistance: 4000 }
+];
+
+let currentRodIndex = 0;
+let gold = 100; // Starting gold
+let currentBait = 'small'; // Player starts with small bait
+let inventory = {
+    'small': 5,
+    'medium': 0,
+    'large': 0
+};
+
+// Bait types and costs
+const baitTypes = {
+    'small': { name: 'Small Bait', cost: 10 },
+    'medium': { name: 'Medium Bait', cost: 30 },
+    'large': { name: 'Large Bait', cost: 80 }
 };
 
 const seaFloorY = 4500; // Seafloor depth limit
 
-let gold = 0;
-const fishes = Array.from({ length: 20 }, () => new Fish(canvas.width, canvas.height));
-const hook = { x: canvas.width / 2, y: 50 };
+// Initialize fishes with different types
+const fishTypes = ['passive', 'medium', 'large', 'predator', 'mega'];
+let fishes = [];
+
+// Generate initial fish population
+for (let i = 0; i < 20; i++) {
+    const type = fishTypes[Math.floor(Math.random() * fishTypes.length)];
+    fishes.push(new Fish(canvas.width, canvas.height, type));
+}
+
+const hook = { 
+    x: canvas.width / 2, 
+    y: 50,
+    strength: rodTypes[currentRodIndex].strength
+};
+
+// Upgrade slots for the rod
+let rodUpgrades = {
+    sink: null,
+    float: null,
+    attractant: null
+};
+
+function buyRod() {
+    if (currentRodIndex < rodTypes.length - 1) {
+        const nextRod = rodTypes[currentRodIndex + 1];
+        if (gold >= nextRod.cost) {
+            gold -= nextRod.cost;
+            currentRodIndex++;
+            hook.strength = rodTypes[currentRodIndex].strength;
+            casting.maxCastDepth = rodTypes[currentRodIndex].castDistance;
+            updateUI();
+            console.log(`Upgraded to ${nextRod.name}`);
+        } else {
+            console.log(`Not enough gold to buy ${nextRod.name}. Need ${nextRod.cost - gold} more.`);
+        }
+    } else {
+        console.log("Already have the best rod!");
+    }
+}
+
+function buyBait(type) {
+    const bait = baitTypes[type];
+    if (gold >= bait.cost) {
+        gold -= bait.cost;
+        inventory[type]++;
+        updateUI();
+        console.log(`Bought ${bait.name}`);
+    } else {
+        console.log(`Not enough gold to buy ${bait.name}. Need ${bait.cost - gold} more.`);
+    }
+}
+
+function updateUI() {
+    // Update UI elements
+    if (goldDisplay) goldDisplay.textContent = gold;
+    if (rodDisplay) rodDisplay.textContent = rodTypes[currentRodIndex].name;
+    if (baitDisplay) baitDisplay.textContent = baitTypes[currentBait].name;
+    if (inventoryDisplay) inventoryDisplay.textContent = 
+        `Small: ${inventory.small}, Medium: ${inventory.medium}, Large: ${inventory.large}`;
+}
 
 function update() {
     // Update wave animation
@@ -70,7 +164,13 @@ function update() {
 
     // Handle casting power - increase while holding (but hook stays at boat)
     if (casting.isCasting) {
-        casting.castPower = Math.min(casting.castPower + 30, casting.maxCastDepth);
+        casting.castPower = Math.min(casting.castPower + 30, rodTypes[currentRodIndex].castDistance);
+        // Apply upgrades that affect casting
+        if (rodUpgrades.sink) {
+            // Sinks make the hook drop faster
+            casting.castPower = Math.min(casting.castPower + 50, rodTypes[currentRodIndex].castDistance);
+        }
+        
         // Hook stays at boat while charging
         hook.x = boat.x;
         hook.y = 50;
@@ -79,32 +179,91 @@ function update() {
     // Handle reeling in - move hook up while holding click
     if (casting.isReeling) {
         casting.hasReeled = true; // Mark that we've started reeling
-        hook.y -= 20;
+        
+        // Check if any fish is pulling against the rod
+        let fishResistance = 0;
+        fishes.forEach(fish => {
+            if (fish.caughtByHook) {
+                if (fish.fishType === 'mega') {
+                    // Mega fish offer significant resistance
+                    fishResistance += 15;
+                } else if (fish.fishType === 'large' || fish.fishType === 'predator') {
+                    // Large and predator fish offer moderate resistance
+                    fishResistance += 8;
+                } else {
+                    // Smaller fish offer little resistance
+                    fishResistance += 3;
+                }
+            }
+        });
+        
+        // Calculate if the rod can handle the fish
+        if (hook.strength >= fishResistance) {
+            hook.y -= 20 - (fishResistance * 0.3); // Faster reeling with stronger rod
+        } else {
+            // Rod breaks or fish gets away
+            console.log("Fish got away! Upgrade your rod strength.");
+            fishes.forEach(fish => {
+                if (fish.caughtByHook) {
+                    fish.caughtByHook = false;
+                    fish.isCaught = false;
+                }
+            });
+        }
         
         // Keep hook following boat horizontally
         hook.x = boat.x;
         
-// Check if hook reached surface
+        // Check if hook reached surface
         if (hook.y <= 50) {
             // Collect fish and reset
+            let fishCaught = false;
             fishes.forEach(fish => {
                 if (fish.isCaught) {
-                    gold += Math.floor(fish.weight * 10);
+                    gold += fish.value;
+                    fishCaught = true;
+                    
+                    // If the fish can be used as bait, add to inventory
+                    if (fish.fishType === 'passive') {
+                        inventory.small++;
+                        console.log("Got small bait fish!");
+                    } else if (fish.fishType === 'medium') {
+                        inventory.medium++;
+                        console.log("Got medium bait fish!");
+                    } else if (fish.fishType === 'large') {
+                        inventory.large++;
+                        console.log("Got large bait fish!");
+                    }
+                    
                     fish.respawn();
                 }
             });
+            
+            if (fishCaught) {
+                console.log("Successfully caught fish!");
+            }
             
             // Reset casting state
             hook.y = 50;
             casting.isFishing = false;
             casting.isReeling = false;
             casting.hasReeled = false; // Reset the hasReeled flag
+            
+            updateUI();
         }
     }
     // Handle hook dropping after cast release (only if we haven't started reeling yet)
     else if (casting.isFishing && !casting.hasReeled && hook.y < casting.castPower) {
+        // Apply upgrades that affect dropping speed
+        let dropSpeed = 40;
+        if (rodUpgrades.sink) {
+            dropSpeed += 20; // Sinks make the hook drop faster
+        } else if (rodUpgrades.float) {
+            dropSpeed -= 20; // Floats make the hook drop slower
+        }
+        
         // Hook is still dropping to target depth
-        hook.y += 40; // Fast drop speed
+        hook.y += dropSpeed;
         hook.x = boat.x;
     }
     // Handle active fishing (hook stationary at cast depth or after reeling)
@@ -135,16 +294,58 @@ function update() {
         // Update fish movement
         fish.update();
         
-        // Check collision with hook (only when stationary)
-        if (!fish.isCaught && checkCollision(hook, fish) && casting.isFishing) {
-            fish.isCaught = true;
-            console.log("Fish caught!");
+        // Check collision with hook (only when stationary and bait available)
+        if (!fish.isCaught && 
+            checkCollision(hook, fish) && 
+            casting.isFishing && 
+            inventory[currentBait] > 0) {
+            
+            // Determine if this fish can be caught with current bait
+            let canCatch = false;
+            switch(currentBait) {
+                case 'small':
+                    // Small bait catches passive fish
+                    canCatch = fish.fishType === 'passive';
+                    break;
+                case 'medium':
+                    // Medium bait catches passive and medium fish
+                    canCatch = fish.fishType === 'passive' || fish.fishType === 'medium';
+                    break;
+                case 'large':
+                    // Large bait catches all except mega fish
+                    canCatch = fish.fishType !== 'mega';
+                    break;
+            }
+            
+            if (canCatch) {
+                fish.isCaught = true;
+                fish.caughtByHook = true;
+                console.log(`${fish.fishType} fish caught with ${currentBait} bait!`);
+                
+                // Use up the bait
+                inventory[currentBait]--;
+                updateUI();
+            } else {
+                console.log(`Can't catch ${fish.fishType} fish with ${currentBait} bait!`);
+            }
         }
         
         if (fish.isCaught) {
             // Make the fish follow the hook
             fish.x = hook.x - fish.width / 2;
             fish.y = hook.y;
+        }
+        
+        // Handle predator fish behavior
+        if (fish.fishType === 'predator' && !fish.isCaught) {
+            // Predators might steal bait from other fish
+            fishes.forEach(otherFish => {
+                if (otherFish.caughtByHook && otherFish !== fish && Math.random() < fish.hunger) {
+                    otherFish.caughtByHook = false;
+                    otherFish.isCaught = false;
+                    console.log("Predator fish stole your catch!");
+                }
+            });
         }
     });
 }
@@ -220,7 +421,7 @@ function draw() {
     ctx.fillRect(0, seaFloorY, canvas.width, 500);
 
     // Draw Boat using image
-    if (boatImage.complete && boatImage.naturalWidth !== 0) {
+    if (boatImageLoaded && boatImage.complete && boatImage.naturalWidth !== 0) {
         // Draw the boat image centered at boat position
         ctx.drawImage(boatImage, boat.x - boat.width / 2, boat.y - boat.height / 2, boat.width, boat.height);
     } else {
@@ -247,9 +448,25 @@ function draw() {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Draw Hook
+        // Draw Hook with bait
         ctx.fillStyle = "silver";
         ctx.fillRect(hook.x - 5, hook.y, 10, 15);
+        
+        // Draw bait based on current bait type
+        switch(currentBait) {
+            case 'small':
+                ctx.fillStyle = '#FFD700'; // Gold for small bait
+                break;
+            case 'medium':
+                ctx.fillStyle = '#FF8C00'; // Orange for medium bait
+                break;
+            case 'large':
+                ctx.fillStyle = '#DC143C'; // Crimson for large bait
+                break;
+        }
+        ctx.beginPath();
+        ctx.arc(hook.x, hook.y + 15, 5, 0, Math.PI * 2);
+        ctx.fill();
     }
 
     // Draw Fishes
@@ -272,7 +489,7 @@ function draw() {
         ctx.fillRect(barX, barY, barWidth, barHeight);
         
         // Power indicator
-        const powerPercent = casting.castPower / casting.maxCastDepth;
+        const powerPercent = casting.castPower / rodTypes[currentRodIndex].castDistance;
         const powerWidth = barWidth * powerPercent;
         
         // Gradient for power bar
@@ -304,18 +521,32 @@ function draw() {
         ctx.textAlign = "center";
         ctx.fillText("Click to Reel In!", canvas.width / 2, canvas.height - 50);
     }
-    
-    // Draw current gold
-    ctx.fillStyle = "#FFD700";
-    ctx.font = "bold 24px Arial";
-    ctx.textAlign = "left";
-    ctx.fillText(`Gold: ${gold}`, 20, 40);
 }
+
+// Handle key presses for upgrades and bait selection
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'r' || e.key === 'R') {
+        buyRod();
+    } else if (e.key === 'b' || e.key === 'B') {
+        // Cycle through bait types
+        if (inventory.medium > 0) {
+            currentBait = 'medium';
+        } else if (inventory.large > 0) {
+            currentBait = 'large';
+        } else {
+            currentBait = 'small';
+        }
+        updateUI();
+    }
+});
 
 function loop() {
     update();
     draw();
     requestAnimationFrame(loop);
 }
+
+// Initial UI update
+updateUI();
 
 loop();

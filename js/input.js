@@ -13,7 +13,7 @@ export const boatInput = {
 export const casting = {
     isCasting: false,
     castPower: 0,
-    maxCastDepth: 4000,
+    maxCastDepth: 1000, // Will be updated based on rod
     isFishing: false,
     isReeling: false,
     hasReeled: false // Track if we've started reeling
