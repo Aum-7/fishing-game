@@ -421,8 +421,9 @@ function update() {
     }
 
     fishes.forEach(fish => {
-        // Update fish movement
-        fish.update();
+        // Update fish movement with hook position for bait attraction (only when fishing)
+        const isFishingWithBait = casting.isFishing && hook.y > 100;
+        fish.update(isFishingWithBait ? hook.x : null, isFishingWithBait ? hook.y : null);
         
         // Check collision with hook (only when hook is at target depth and bait available)
         if (!fish.isCaught && 
