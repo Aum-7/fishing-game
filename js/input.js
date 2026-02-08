@@ -73,8 +73,11 @@ window.addEventListener('mouseup', () => {
         casting.isFishing = true;
     }
     
-    // No longer stop reeling when mouse is released - reeling continues automatically
-    // until hook reaches surface or fish gets away
+    // Stop reeling when mouse is released - hook only moves up while holding click
+    if (casting.isReeling) {
+        casting.isReeling = false;
+        casting.isFishing = true; // Keep hook at current depth when reeling stops
+    }
 });
 
 window.addEventListener('mousemove', handleInput);
@@ -103,7 +106,10 @@ window.addEventListener('touchend', () => {
         casting.isFishing = true;
     }
     
-    // No longer stop reeling when touch ends - reeling continues automatically
-    // until hook reaches surface or fish gets away
+    // Stop reeling when touch ends - hook only moves up while holding click
+    if (casting.isReeling) {
+        casting.isReeling = false;
+        casting.isFishing = true; // Keep hook at current depth when reeling stops
+    }
 });
 window.addEventListener('touchmove', handleInput, { passive: false });

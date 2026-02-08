@@ -182,7 +182,7 @@ function update() {
     }
 
     // Handle reeling in - move hook up while holding click
-    if (casting.isReeling) {
+    if (casting.isReeling && input.isDown) {
         casting.hasReeled = true; // Mark that we've started reeling
         
         // Check if any fish is pulling against the rod
@@ -204,7 +204,7 @@ function update() {
         
         // Calculate if the rod can handle the fish
         if (hook.strength >= fishResistance) {
-            hook.y -= 20 - (fishResistance * 0.3); // Faster reeling with stronger rod
+            hook.y -= 4 - (fishResistance * 0.02); // Fast reeling speed - 4 pixels per frame
         } else {
             // Rod breaks or fish gets away
             console.log("Fish got away! Upgrade your rod strength.");
