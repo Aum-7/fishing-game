@@ -16,7 +16,8 @@ export const casting = {
     maxCastDepth: 1000, // Will be updated based on rod
     isFishing: false,
     isReeling: false,
-    hasReeled: false // Track if we've started reeling
+    hasReeled: false, // Track if we've started reeling
+    hookAtTarget: false // Track if hook has reached target depth (can only catch fish then)
 };
 
 // Handle keyboard input for boat
@@ -71,6 +72,7 @@ window.addEventListener('mouseup', () => {
     if (casting.isCasting) {
         casting.isCasting = false;
         casting.isFishing = true;
+        casting.hookAtTarget = false; // Hook will start dropping, can't catch yet
     }
     
     // Stop reeling when mouse is released - hook only moves up while holding click
@@ -104,6 +106,7 @@ window.addEventListener('touchend', () => {
     if (casting.isCasting) {
         casting.isCasting = false;
         casting.isFishing = true;
+        casting.hookAtTarget = false; // Hook will start dropping, can't catch yet
     }
     
     // Stop reeling when touch ends - hook only moves up while holding click

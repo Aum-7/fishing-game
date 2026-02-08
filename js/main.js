@@ -179,6 +179,9 @@ function update() {
         // Hook stays at boat while charging
         hook.x = boat.x;
         hook.y = 50;
+        
+        // Reset hookAtTarget when starting a new cast
+        casting.hookAtTarget = false;
     }
 
     // Handle reeling in - move hook up while holding click
@@ -270,6 +273,9 @@ function update() {
         // Hook is still dropping to target depth
         hook.y += dropSpeed;
         hook.x = boat.x;
+        
+        // Hook is not at target yet, can't catch fish
+        casting.hookAtTarget = false;
     }
     // Handle active fishing (hook stationary at cast depth or after reeling)
     else if (casting.isFishing && (hook.y >= casting.castPower || casting.hasReeled)) {
@@ -277,6 +283,9 @@ function update() {
         // Fish can still be caught by collision
         // Keep hook following boat horizontally
         hook.x = boat.x;
+        
+        // Hook is now at target depth - fish can be caught
+        casting.hookAtTarget = true;
     }
     // Normal mode - hook follows boat when not fishing
     else {
@@ -299,10 +308,10 @@ function update() {
         // Update fish movement
         fish.update();
         
-        // Check collision with hook (only when stationary or reeling and bait available)
+        // Check collision with hook (only when hook is at target depth and bait available)
         if (!fish.isCaught && 
             checkCollision(hook, fish) && 
-            (casting.isFishing || casting.isReeling) && 
+            casting.hookAtTarget && 
             inventory[currentBait] > 0) {
             
             // Determine if this fish can be caught with current bait
