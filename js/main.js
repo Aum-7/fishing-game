@@ -81,21 +81,21 @@ const baitTypes = {
     'large': { name: 'Large Bait', cost: 80 }
 };
 
-// Bait upgrade mapping - what each fish type upgrades to
+// Bait upgrade mapping - what each fish type upgrades to (progression: small -> medium -> large)
 const baitUpgradeMap = {
-    'passive': 'small',
-    'medium': 'medium',
-    'large': 'large',
-    'predator': 'large',
-    'mega': null  // Already max tier
+    'passive': 'medium',  // Small fish upgrades to medium bait
+    'medium': 'large',    // Medium fish upgrades to large bait
+    'large': null,        // Already max tier
+    'predator': null,     // Already max tier
+    'mega': null          // Already max tier
 };
 
 // Bait upgrade names for display
 const baitUpgradeNames = {
     'passive': 'Medium Bait',
     'medium': 'Large Bait',
-    'large': 'Mega Bait',
-    'predator': 'Mega Bait',
+    'large': null,
+    'predator': null,
     'mega': null
 };
 
@@ -202,6 +202,8 @@ function sellFish() {
         pendingFish.respawn();
         pendingFish = null;
     }
+    // Always reset to small bait after selling
+    currentBait = 'small';
     closeFishModal();
     updateUI();
 }
@@ -212,6 +214,8 @@ function upgradeBait() {
         const upgradeTo = baitUpgradeMap[pendingFish.fishType];
         if (upgradeTo) {
             inventory[upgradeTo]++;
+            // Automatically switch to the upgraded bait type
+            currentBait = upgradeTo;
             console.log(`Upgraded to ${baitTypes[upgradeTo].name}!`);
         }
         pendingFish.respawn();
@@ -649,21 +653,12 @@ function draw() {
     }
 }
 
-// Handle key presses for upgrades and bait selection
+// Handle key presses for upgrades
 document.addEventListener('keydown', (e) => {
     if (e.key === 'r' || e.key === 'R') {
         buyRod();
-    } else if (e.key === 'b' || e.key === 'B') {
-        // Cycle through bait types
-        if (inventory.medium > 0) {
-            currentBait = 'medium';
-        } else if (inventory.large > 0) {
-            currentBait = 'large';
-        } else {
-            currentBait = 'small';
-        }
-        updateUI();
     }
+    // Bait size automatically increases by catching fish - no manual selection
 });
 
 function loop() {
