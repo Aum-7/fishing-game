@@ -18,6 +18,18 @@
         <div>Controls: Arrow Keys/WASD to move boat | Mouse to cast | R to upgrade rod | B to change bait</div>
     </div>
     
+    <!-- Fish Decision Modal -->
+    <div id="fish-modal" class="hidden">
+        <div class="modal-content">
+            <h2>Fish Caught!</h2>
+            <p id="fish-info"></p>
+            <div class="button-group">
+                <button id="sell-btn">Sell Fish (+<span id="sell-amount">0</span> gold)</button>
+                <button id="upgrade-btn">Upgrade to <span id="upgrade-name">Medium Bait</span></button>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

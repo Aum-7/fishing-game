@@ -81,7 +81,29 @@ const baitTypes = {
     'large': { name: 'Large Bait', cost: 80 }
 };
 
+// Bait upgrade mapping - what each fish type upgrades to
+const baitUpgradeMap = {
+    'passive': 'small',
+    'medium': 'medium',
+    'large': 'large',
+    'predator': 'large',
+    'mega': null  // Already max tier
+};
+
+// Bait upgrade names for display
+const baitUpgradeNames = {
+    'passive': 'Medium Bait',
+    'medium': 'Large Bait',
+    'large': 'Mega Bait',
+    'predator': 'Mega Bait',
+    'mega': null
+};
+
 const seaFloorY = 4500; // Seafloor depth limit
+
+// Fish decision state
+let fishDecisionPending = false;
+let pendingFish = null;
 
 // Initialize fishes with different types
 const fishTypes = ['passive', 'medium', 'large', 'predator', 'mega'];
@@ -138,6 +160,94 @@ function buyBait(type) {
     }
 }
 
+// Show the fish decision modal
+function showFishOptions(fish) {
+    fishDecisionPending = true;
+    pendingFish = fish;
+    
+    const modal = document.getElementById('fish-modal');
+    const fishInfo = document.getElementById('fish-info');
+    const sellAmount = document.getElementById('sell-amount');
+    const upgradeBtn = document.getElementById('upgrade-btn');
+    const upgradeName = document.getElementById('upgrade-name');
+    
+    // Get fish type display name
+    const fishTypeNames = {
+        'passive': 'Small Fish',
+        'medium': 'Medium Fish',
+        'large': 'Large Fish',
+        'predator': 'Predator Fish',
+        'mega': 'Mega Fish'
+    };
+    
+    fishInfo.textContent = `Caught: ${fishTypeNames[fish.fishType]} (Value: ${fish.value} gold)`;
+    sellAmount.textContent = fish.value;
+    
+    // Check if upgrade is available
+    const upgradeTo = baitUpgradeNames[fish.fishType];
+    if (upgradeTo) {
+        upgradeBtn.style.display = 'inline-block';
+        upgradeName.textContent = upgradeTo;
+    } else {
+        upgradeBtn.style.display = 'none';
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+// Sell the fish
+function sellFish() {
+    if (pendingFish) {
+        gold += pendingFish.value;
+        pendingFish.respawn();
+        pendingFish = null;
+    }
+    closeFishModal();
+    updateUI();
+}
+
+// Upgrade bait using the fish
+function upgradeBait() {
+    if (pendingFish) {
+        const upgradeTo = baitUpgradeMap[pendingFish.fishType];
+        if (upgradeTo) {
+            inventory[upgradeTo]++;
+            console.log(`Upgraded to ${baitTypes[upgradeTo].name}!`);
+        }
+        pendingFish.respawn();
+        pendingFish = null;
+    }
+    closeFishModal();
+    updateUI();
+}
+
+// Close the fish modal
+function closeFishModal() {
+    const modal = document.getElementById('fish-modal');
+    modal.classList.add('hidden');
+    fishDecisionPending = false;
+    
+    // Reset casting state after making a decision
+    hook.y = 50;
+    casting.isFishing = false;
+    casting.isReeling = false;
+    casting.hasReeled = false;
+}
+
+// Setup event listeners for fish modal buttons
+document.addEventListener('DOMContentLoaded', () => {
+    const sellBtn = document.getElementById('sell-btn');
+    const upgradeBtn = document.getElementById('upgrade-btn');
+    
+    if (sellBtn) {
+        sellBtn.addEventListener('click', sellFish);
+    }
+    
+    if (upgradeBtn) {
+        upgradeBtn.addEventListener('click', upgradeBait);
+    }
+});
+
 function updateUI() {
     // Update UI elements
     if (goldDisplay) goldDisplay.textContent = gold;
@@ -188,76 +298,78 @@ function update() {
     if (casting.isReeling && input.isDown) {
         casting.hasReeled = true; // Mark that we've started reeling
         
-        // Check if any fish is pulling against the rod
-        let fishResistance = 0;
-        fishes.forEach(fish => {
-            if (fish.caughtByHook) {
-                if (fish.fishType === 'mega') {
-                    // Mega fish offer significant resistance
-                    fishResistance += 15;
-                } else if (fish.fishType === 'large' || fish.fishType === 'predator') {
-                    // Large and predator fish offer moderate resistance
-                    fishResistance += 8;
-                } else {
-                    // Smaller fish offer little resistance
-                    fishResistance += 3;
-                }
-            }
-        });
+        // Check if any fish is currently caught
+        const caughtFish = fishes.find(fish => fish.isCaught);
         
-        // Calculate if the rod can handle the fish
-        if (hook.strength >= fishResistance) {
-            hook.y -= 4 - (fishResistance * 0.02); // Fast reeling speed - 4 pixels per frame
+        // If no fish caught, limit hook to water surface (y >= 0)
+        if (!caughtFish) {
+            // Hook cannot go above water surface without a fish
+            if (hook.y <= 0) {
+                // Hook reached surface with no fish - stop and reset
+                hook.y = 0;
+                console.log("No fish caught! Try again.");
+                // Reset fishing state - hook returns to boat
+                casting.isReeling = false;
+                casting.isFishing = false;
+                casting.hasReeled = false;
+                hook.y = 50; // Return hook to starting boat position
+            } else {
+                // Still in water, continue reeling up
+                hook.y -= 4; // Reel speed without fish
+                hook.x = boat.x;
+            }
         } else {
-            // Rod breaks or fish gets away
-            console.log("Fish got away! Upgrade your rod strength.");
+            // Fish is caught - allow full reeling
+            
+            // Check if any fish is pulling against the rod
+            let fishResistance = 0;
             fishes.forEach(fish => {
                 if (fish.caughtByHook) {
-                    fish.caughtByHook = false;
-                    fish.isCaught = false;
-                }
-            });
-        }
-        
-        // Keep hook following boat horizontally
-        hook.x = boat.x;
-        
-        // Check if hook reached surface
-        if (hook.y <= 50) {
-            // Collect fish and reset
-            let fishCaught = false;
-            fishes.forEach(fish => {
-                if (fish.isCaught) {
-                    gold += fish.value;
-                    fishCaught = true;
-                    
-                    // If the fish can be used as bait, add to inventory
-                    if (fish.fishType === 'passive') {
-                        inventory.small++;
-                        console.log("Got small bait fish!");
-                    } else if (fish.fishType === 'medium') {
-                        inventory.medium++;
-                        console.log("Got medium bait fish!");
-                    } else if (fish.fishType === 'large') {
-                        inventory.large++;
-                        console.log("Got large bait fish!");
+                    if (fish.fishType === 'mega') {
+                        // Mega fish offer significant resistance
+                        fishResistance += 15;
+                    } else if (fish.fishType === 'large' || fish.fishType === 'predator') {
+                        // Large and predator fish offer moderate resistance
+                        fishResistance += 8;
+                    } else {
+                        // Smaller fish offer little resistance
+                        fishResistance += 3;
                     }
-                    
-                    fish.respawn();
                 }
             });
             
-            if (fishCaught) {
-                console.log("Successfully caught fish!");
+            // Calculate if the rod can handle the fish
+            if (hook.strength >= fishResistance) {
+                hook.y -= 4 - (fishResistance * 0.02); // Fast reeling speed - 4 pixels per frame
+            } else {
+                // Rod breaks or fish gets away
+                console.log("Fish got away! Upgrade your rod strength.");
+                fishes.forEach(fish => {
+                    if (fish.caughtByHook) {
+                        fish.caughtByHook = false;
+                        fish.isCaught = false;
+                    }
+                });
             }
             
-            // Reset casting state
-            hook.y = 50;
-            casting.isFishing = false;
-            casting.isReeling = false;
-            casting.hasReeled = false; // Reset the hasReeled flag
+            // Keep hook following boat horizontally
+            hook.x = boat.x;
             
-            updateUI();
+            // Check if hook reached surface with fish
+            if (hook.y <= 50 && !fishDecisionPending) {
+                // Collect fish and show options
+                let fishCaught = false;
+                fishes.forEach(fish => {
+                    if (fish.isCaught) {
+                        fishCaught = true;
+                        showFishOptions(fish);
+                    }
+                });
+                
+                if (fishCaught) {
+                    console.log("Fish caught! Choose action...");
+                }
+            }
         }
     }
     // Handle hook dropping after cast release (only if we haven't started reeling yet)
